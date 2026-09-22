@@ -1,55 +1,64 @@
 package rate_limiters
 
 import (
-	"errors"
 	"log"
 	"net/http"
+	"os"
 
 	ctx "context"
 
 	config "github.com/Devrao-2006/Go-Limit/config/redis-config"
 	constants "github.com/Devrao-2006/Go-Limit/constants"
 	helper "github.com/Devrao-2006/Go-Limit/helper"
-	"github.com/redis/go-redis/v9"
 )
 
-const allowed = "ALLOWED"
-const rejected = "REJECTED"
-const not_processed = "NOT PROCESSED"
+var Scripts struct {
+	Fixed_window string
+}
 
-func FixedRateLimitHandler(w http.ResponseWriter, r *http.Request) (string, error) {
-	var db *redis.Client = nil
-	if db = config.GetClient(config.REDIS_DB); db == nil {
-		log.Printf("DB Not Initilized")
-		return not_processed, errors.New("DB Not initialzed")
+func Init() error {
+	fixed_window_script, err := os.ReadFile("./fixed_limit.lua")
+	if err != nil {
+		return err
+	}
+
+	Scripts.Fixed_window = string(fixed_window_script)
+	
+	return nil
+}
+
+func FixedRateLimitHandler(w http.ResponseWriter, r *http.Request) {
+	db := config.GetClient(config.REDIS_DB)
+	if db == nil {
+		log.Printf("DB Not Initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
 
 	ip, err := helper.GetIPfromheader(r.Header)
-
 	if err != nil {
-		return not_processed, errors.New("No IP Found")
+		http.Error(w, "Bad Request: No IP Found", http.StatusBadRequest)
+		return
 	}
 
 	key := "fixed_" + ip
-
-	var val int
-
 	cntx := ctx.Background()
 
-	if err1 := db.Get(cntx, key).Scan(&val); err1 != nil {
-		if(err1 == redis.Nil) {
-			var new_val int = 1
-			db.Set(cntx, key, new_val, constants.Max_window_size)
-			return allowed, nil
-		}
-		log.Fatalf("Cannot Get the Key")
-		return not_processed, errors.New("Cannnot Get the Key for this IP")
+	limitVal := constants.Max_requests_allowed_in_fixed_window
+	windowSize := int(constants.Max_window_size.Seconds())
+
+	result, err2 := db.Eval(cntx, Scripts.Fixed_window, []string{key}, limitVal, windowSize).Int64()
+	if err2 != nil {
+		log.Printf("Rate limit script error for IP %s: %v", ip, err2)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
 
-	if val < constants.Max_rqeuests_allowed_in_fixed_window {
-		db.Incr(cntx, key)
-		return allowed, nil
+	if result > int64(limitVal) {
+		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+		return
 	}
 
-	return rejected, nil
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Request allowed"))
 }

@@ -13,8 +13,11 @@ func main() {
 		log.Fatalf("Redis Clients were Not initialized: %v", err)
 	}
 
-	mux := http.NewServeMux()
+	if err := limit.Init(); err != nil {
+		log.Fatalf("Scripts Were Not Initialzied: %v", err)
+	}
 
+	mux := http.NewServeMux()
 	mux.HandleFunc("/fixed-rate-limit", limit.FixedRateLimitHandler)
 
 	err := http.ListenAndServe("8000", mux)
