@@ -3,7 +3,7 @@ package cmd
 import (
 	"log"
 	"net/http"
-	controller "github.com/Devrao-2006/Go-Limit/controller"
+	limit "github.com/Devrao-2006/Go-Limit/rate-limiters"
 	redis "github.com/Devrao-2006/Go-Limit/config/redis-config"
 )
 
@@ -15,7 +15,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/fixed-rate-limit", controller.FixedRateLimitHandler)
+	mux.HandleFunc("/fixed-rate-limit", limit.FixedRateLimitHandler)
 
 	err := http.ListenAndServe("8000", mux)
 
