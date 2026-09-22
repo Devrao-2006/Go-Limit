@@ -15,4 +15,4 @@ if allowed then
     end
 end
 
-return {allowed & 1 or 0, count + (allowed & 1 or 0)}
+return {allowed and 1 or 0, count + (allowed and 1 or 0)}

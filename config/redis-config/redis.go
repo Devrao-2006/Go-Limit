@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/Devrao-2006/Go-Limit/config"
 	"github.com/redis/go-redis/v9"
@@ -18,7 +19,7 @@ func GetClient(db int) *redis.Client {
 
 	client := redis.NewClient(&redis.Options{
 		Addr: config.GetEnv("REDIS_URL"),
-		DB: db,
+		DB:   db,
 	})
 
 	RedisClients[db] = client
@@ -27,7 +28,7 @@ func GetClient(db int) *redis.Client {
 }
 
 func InitClients() error {
-	client := GetClient(REDIS_DB);
+	client := GetClient(REDIS_DB)
 
 	if client == nil {
 		return fmt.Errorf("failed to initialize Redis")
@@ -36,4 +37,12 @@ func InitClients() error {
 	fmt.Println("All the Redis Client Are Initialized")
 
 	return nil
+}
+
+func CloseRedis() {
+	for _, client := range RedisClients {
+		if err := client.Close(); err != nil {
+			log.Printf("Error Closing Redis: %v", err)
+		}
+	}
 }
