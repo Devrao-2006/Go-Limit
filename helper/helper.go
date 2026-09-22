@@ -11,7 +11,7 @@ func GetIPfromheader(headers http.Header) (string, error) {
 	var ip string
 
 	for _, val := range constants.IP_HEADERS_PRIORITY_LIST {
-		ip := headers.Get(val)
+		ip = headers.Get(val)
 
 		if ip != "" {
 			break

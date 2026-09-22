@@ -20,6 +20,7 @@ import (
 var Scripts struct {
 	Fixed_window   string
 	Sliding_window string
+	Bucket         string
 }
 
 func Init() error {
@@ -34,6 +35,12 @@ func Init() error {
 		return errors.New("Sliding window Lua Scripts was Not Loaded")
 	}
 	Scripts.Sliding_window = string(Sliding_window_script)
+
+	Bucket_script, err2 := os.ReadFile("./bucket_limit.lua")
+	if err2 != nil {
+		return errors.New("Bucket Lua Scripts was Not Loaded")
+	}
+	Scripts.Bucket = string(Bucket_script)
 	return nil
 }
 
@@ -64,7 +71,7 @@ func FixedRateLimitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if result >= int64(limitVal) {
+	if result > int64(limitVal) {
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -105,7 +112,40 @@ func SlidingWindowLimitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result[0].(int64) == 0 {
-		log.Printf("Rate limit script error for IP %s", ip)
+		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Request allowed"))
+}
+
+func BucketLimitHandler(w http.ResponseWriter, r *http.Request) {
+	db := config.GetClient(config.REDIS_DB)
+	if db == nil {
+		log.Printf("DB Not Initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	ip, err := helper.GetIPfromheader(r.Header)
+	if err != nil {
+		http.Error(w, "Bad Request: No IP Found", http.StatusBadRequest)
+		return
+	}
+
+	key := "bucket_" + ip
+	curr := time.Now().Unix()
+
+	result, err1 := db.Eval(ctx.Background(), Scripts.Bucket, []string{key}, constants.Max_requests_allowed_in_a_window, constants.Refill_interval, curr, constants.Max_bucket_ttl).Slice()
+
+	if err1 != nil {
+		log.Printf("Rate limit script error for IP %s: %v", ip, err1)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if result[0].(int64) == 0 {
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}

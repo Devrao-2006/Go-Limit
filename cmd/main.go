@@ -20,6 +20,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/fixed-rate-limit", limit.FixedRateLimitHandler)
 	mux.HandleFunc("/sliding-rate-limit", limit.SlidingWindowLimitHandler)
+	mux.HandleFunc("/bucket-rate-limit", limit.BucketLimitHandler)
 
 	err := http.ListenAndServe("8000", mux)
 
